@@ -334,6 +334,18 @@ void HWCColorMode::PopulateColorModes() {
 
   DLOGV_IF(kTagClient, "Color Modes supported count = %d", color_mode_count);
 
+  // SM8150's libsdm-color.so does not parse RenderIntent from QDCM XML.
+  // Map each QDCM mode name to the desired RenderIntent value directly.
+  static const std::map<std::string, int> kPresetRenderIntents = {
+      {"none", 257},       {"native", 258},     {"smart_MC", 256},
+      {"hal_srgb", 259},   {"hal_dci_p3", 260}, {"smart_MC1", 261},
+      {"none1", 262},      {"GM_1", 263},       {"GM_11", 264},
+      {"GM_2", 265},       {"GM_22", 266},      {"GM_3", 267},
+      {"GM_33", 268},      {"video1", 269},     {"video11", 270},
+      {"video2", 271},     {"video22", 272},    {"video3", 273},
+      {"video33", 274},    {"hal_hdr", 0},
+  };
+
   std::vector<std::string> color_modes(color_mode_count);
   error = display_intf_->GetColorModes(&color_mode_count, &color_modes);
   for (uint32_t i = 0; i < color_mode_count; i++) {
@@ -354,59 +366,52 @@ void HWCColorMode::PopulateColorModes() {
           transfer = it.second;
         }
       }
+    }
 
-      DLOGV_IF(kTagClient, "color_gamut : %s, dynamic_range : %s, pic_quality : %s",
-               color_gamut.c_str(), dynamic_range.c_str(), pic_quality.c_str());
-      if (color_gamut == kNative) {
-        color_mode_map_[ColorMode::NATIVE][RenderIntent::COLORIMETRIC][kSdrType] = mode_string;
-      }
+    auto preset = kPresetRenderIntents.find(mode_string);
+    if (preset == kPresetRenderIntents.end()) {
+      DLOGW("No preset RenderIntent for mode %s, skipping", mode_string.c_str());
+      continue;
+    }
+    int int_render_intent = preset->second;
 
-      if (color_gamut == kSrgb && dynamic_range == kSdr) {
-        if (pic_quality == kStandard) {
-          color_mode_map_[ColorMode::SRGB][RenderIntent::COLORIMETRIC][kSdrType] = mode_string;
-        }
-        if (pic_quality == kEnhanced) {
-          color_mode_map_[ColorMode::SRGB][RenderIntent::ENHANCE][kSdrType] = mode_string;
-        }
-      }
+    DLOGV_IF(kTagClient, "color_gamut : %s, dynamic_range : %s, pic_quality : %s, "
+             "render_intent : %d", color_gamut.c_str(), dynamic_range.c_str(),
+             pic_quality.c_str(), int_render_intent);
 
-      if (color_gamut == kDcip3 && dynamic_range == kSdr) {
-        if (pic_quality == kStandard) {
-          color_mode_map_[ColorMode::DISPLAY_P3][RenderIntent::COLORIMETRIC]
-                         [kSdrType] = mode_string;
-        }
-        if (pic_quality == kEnhanced) {
-          color_mode_map_[ColorMode::DISPLAY_P3][RenderIntent::ENHANCE]
-                         [kSdrType] = mode_string;
-        }
+    auto render_intent = static_cast<RenderIntent>(int_render_intent);
+    if (color_gamut == kNative) {
+      color_mode_map_[ColorMode::NATIVE][render_intent][kSdrType] = mode_string;
+      color_mode_map_[ColorMode::SRGB][render_intent][kSdrType] = mode_string;
+      color_mode_map_[ColorMode::DISPLAY_P3][render_intent][kSdrType] = mode_string;
+    }
+
+    if (color_gamut == kSrgb && dynamic_range == kSdr) {
+      color_mode_map_[ColorMode::SRGB][render_intent][kSdrType] = mode_string;
+    }
+
+    if (color_gamut == kDcip3 && dynamic_range == kSdr) {
+      color_mode_map_[ColorMode::DISPLAY_P3][render_intent][kSdrType] = mode_string;
+    }
+    if (color_gamut == kDcip3 && dynamic_range == kHdr) {
+      if (display_intf_->IsSupportSsppTonemap()) {
+        color_mode_map_[ColorMode::DISPLAY_P3][render_intent][kHdrType] = mode_string;
+      } else if (pic_quality == kStandard) {
+        color_mode_map_[ColorMode::BT2100_PQ][render_intent]
+                       [kHdrType] = mode_string;
+        color_mode_map_[ColorMode::BT2100_HLG][render_intent]
+                       [kHdrType] = mode_string;
       }
-      if (color_gamut == kDcip3 && pic_quality == kStandard && dynamic_range == kHdr) {
-        if (display_intf_->IsSupportSsppTonemap()) {
-          color_mode_map_[ColorMode::DISPLAY_P3][RenderIntent::COLORIMETRIC]
-                         [kHdrType] = mode_string;
-        } else {
-          color_mode_map_[ColorMode::BT2100_PQ][RenderIntent::TONE_MAP_COLORIMETRIC]
-                         [kHdrType] = mode_string;
-          color_mode_map_[ColorMode::BT2100_HLG][RenderIntent::TONE_MAP_COLORIMETRIC]
-                         [kHdrType] = mode_string;
-        }
-      } else if (color_gamut == kBt2020) {
-        if (transfer == kSt2084) {
-          color_mode_map_[ColorMode::BT2100_PQ][RenderIntent::COLORIMETRIC]
-                         [kHdrType] = mode_string;
-        } else if (transfer == kHlg) {
-          color_mode_map_[ColorMode::BT2100_HLG][RenderIntent::COLORIMETRIC]
-                         [kHdrType] = mode_string;
-        } else if (transfer == kGamma2_2) {
-          color_mode_map_[ColorMode::BT2020][RenderIntent::COLORIMETRIC]
-                         [kHdrType] = mode_string;
-        }
-      }
-    } else {
-      // Look at the mode names, if no attributes are found
-      if (mode_string.find("hal_native") != std::string::npos) {
-        color_mode_map_[ColorMode::NATIVE][RenderIntent::COLORIMETRIC]
-                       [kSdrType] = mode_string;
+    } else if (color_gamut == kBt2020) {
+      if (transfer == kSt2084) {
+        color_mode_map_[ColorMode::BT2100_PQ][RenderIntent::COLORIMETRIC]
+                       [kHdrType] = mode_string;
+      } else if (transfer == kHlg) {
+        color_mode_map_[ColorMode::BT2100_HLG][RenderIntent::COLORIMETRIC]
+                       [kHdrType] = mode_string;
+      } else if (transfer == kGamma2_2) {
+        color_mode_map_[ColorMode::BT2020][RenderIntent::COLORIMETRIC]
+                       [kHdrType] = mode_string;
       }
     }
   }
