@@ -335,7 +335,10 @@ void HWCColorMode::PopulateColorModes() {
   DLOGV_IF(kTagClient, "Color Modes supported count = %d", color_mode_count);
 
   // SM8150's libsdm-color.so does not parse RenderIntent from QDCM XML.
-  // Map each QDCM mode name to the desired RenderIntent value directly.
+  // Map each nabu's QDCM mode name to the desired RenderIntent value directly.
+  // This map isn't copy from any QDCM XML
+  // only created for nabu and use RenderIntent to use every modes in nabu's QDCM XML
+  // If it used for other device, please make sure the mode name in QDCM XML and RenderIntent value in this map are correct.
   static const std::map<std::string, int> kPresetRenderIntents = {
       {"none", 257},       {"native", 258},     {"smart_MC", 256},
       {"hal_srgb", 259},   {"hal_dci_p3", 260}, {"smart_MC1", 261},
@@ -382,8 +385,6 @@ void HWCColorMode::PopulateColorModes() {
     auto render_intent = static_cast<RenderIntent>(int_render_intent);
     if (color_gamut == kNative) {
       color_mode_map_[ColorMode::NATIVE][render_intent][kSdrType] = mode_string;
-      color_mode_map_[ColorMode::SRGB][render_intent][kSdrType] = mode_string;
-      color_mode_map_[ColorMode::DISPLAY_P3][render_intent][kSdrType] = mode_string;
     }
 
     if (color_gamut == kSrgb && dynamic_range == kSdr) {

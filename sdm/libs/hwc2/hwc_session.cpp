@@ -51,7 +51,7 @@
 #define HWC_UEVENT_SWITCH_HDMI "change@/devices/virtual/switch/hdmi"
 #define HWC_UEVENT_DRM_EXT_HOTPLUG "mdss_mdp/drm/card"
 
-#define MAX_EXTENDED_RENDER_INTENT    0x1ff
+#define MAX_EXTENDED_RENDER_INTENT 0x1ff
 
 static sdm::HWCSession::HWCModuleMethods g_hwc_module_methods;
 
@@ -930,7 +930,8 @@ int32_t HWCSession::SetColorModeWithRenderIntent(hwc2_device_t *device, hwc2_dis
     return HWC2_ERROR_BAD_PARAMETER;
   }
   auto render_intent = static_cast<RenderIntent>(int_render_intent);
-  if (int_render_intent < 0 || int_render_intent > MAX_EXTENDED_RENDER_INTENT) {
+  if ((render_intent < RenderIntent::COLORIMETRIC) || 
+      (int_render_intent > MAX_EXTENDED_RENDER_INTENT)) {
     DLOGE("Invalid RenderIntent: %d", render_intent);
     return HWC2_ERROR_BAD_PARAMETER;
   }
@@ -2031,7 +2032,7 @@ android::status_t HWCSession::SetColorModeWithRenderIntentOverride(
   }
 
   auto intent_val = static_cast<int32_t>(intent);
-  if (intent_val < 0 || intent_val > MAX_EXTENDED_RENDER_INTENT) {
+  if (intent < RenderIntent::COLORIMETRIC || intent_val > MAX_EXTENDED_RENDER_INTENT) {
     DLOGE("Invalid RenderIntent: %d", intent_val);
     return HWC2_ERROR_BAD_PARAMETER;
   }
